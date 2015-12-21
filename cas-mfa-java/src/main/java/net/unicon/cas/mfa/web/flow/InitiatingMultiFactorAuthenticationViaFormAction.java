@@ -25,10 +25,9 @@ import net.unicon.cas.mfa.authentication.MultiFactorAuthenticationRequestResolve
 import net.unicon.cas.mfa.authentication.RequestedAuthenticationMethodRankingStrategy;
 import net.unicon.cas.mfa.web.flow.util.MultiFactorRequestContextUtils;
 import net.unicon.cas.mfa.web.support.AuthenticationMethodVerifier;
-
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jasig.cas.authentication.Authentication;
-import org.jasig.cas.authentication.principal.Credentials;
+import org.jasig.cas.authentication.Credential;
 import org.jasig.cas.web.flow.AuthenticationViaFormAction;
 import org.jasig.cas.web.support.WebUtils;
 import org.springframework.binding.message.MessageContext;
@@ -79,7 +78,7 @@ public class InitiatingMultiFactorAuthenticationViaFormAction extends AbstractMu
     }
 
     @Override
-    protected final Event doAuthentication(final RequestContext context, final Credentials credentials,
+    protected final Event doAuthentication(final RequestContext context, final Credential credentials,
                                            final MessageContext messageContext, final String id) throws Exception {
 
 
@@ -88,11 +87,12 @@ public class InitiatingMultiFactorAuthenticationViaFormAction extends AbstractMu
             this.cas.destroyTicketGrantingTicket(tgt);
         }
 
-        final String primaryAuthnEventId = this.wrapperAuthenticationAction.submit(context, credentials, messageContext);
-        final Event primaryAuthnEvent = new Event(this, primaryAuthnEventId);
+        final Event primaryAuthnEvent = this.wrapperAuthenticationAction.submit(context, credentials, messageContext);
         if (!success().getId().equals(primaryAuthnEvent.getId())) {
             return primaryAuthnEvent;
         }
+
+        context.getFlowScope().put("ticketGrantingTicketId", WebUtils.getTicketGrantingTicketId(context));
 
         final List<MultiFactorAuthenticationRequestContext> mfaRequests =
                 getMfaRequestOrNull(this.authenticationSupport.getAuthenticationFrom(WebUtils.getTicketGrantingTicketId(context)),
@@ -117,7 +117,7 @@ public class InitiatingMultiFactorAuthenticationViaFormAction extends AbstractMu
 
     @Override
     protected final Event multiFactorAuthenticationSuccessful(final Authentication authentication, final RequestContext context,
-                                                              final Credentials credentials,
+                                                              final Credential credentials,
                                                               final MessageContext messageContext, final String id) {
         return super.getSuccessEvent(context);
     }

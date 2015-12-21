@@ -1,14 +1,17 @@
 package net.unicon.cas.mfa.web.support;
 
-import org.apache.commons.lang.builder.HashCodeBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.jasig.cas.authentication.principal.AbstractWebApplicationService;
+import org.jasig.cas.authentication.principal.DefaultResponse;
 import org.jasig.cas.authentication.principal.Response;
+import org.jasig.cas.authentication.principal.Response.ResponseType;
 import org.jasig.cas.authentication.principal.SimpleWebApplicationServiceImpl;
-import org.jasig.cas.util.HttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 
 import javax.validation.constraints.NotNull;
+import java.util.HashMap;
 
 /**
  * The MultiFactorAuthenticationService is an extension of the generic CAS service
@@ -25,7 +28,7 @@ public final class DefaultMultiFactorAuthenticationSupportingWebApplicationServi
         implements MultiFactorAuthenticationSupportingWebApplicationService {
 
     /** The logger instance. **/
-    protected static final Logger LOGGER =
+    private static final Logger LOGGER =
             LoggerFactory.getLogger(DefaultMultiFactorAuthenticationSupportingWebApplicationService.class);
 
     private static final long serialVersionUID = 7537062414761087535L;
@@ -39,20 +42,25 @@ public final class DefaultMultiFactorAuthenticationSupportingWebApplicationServi
     /** The authentication method source. */
     private AuthenticationMethodSource authenticationMethodSource;
 
+    /** The type of HTTP response. **/
+    private final ResponseType responseType;
+
     /**
      * Create an instance of {@link DefaultMultiFactorAuthenticationSupportingWebApplicationService}.
      *
      * @param id the service id, potentially with a jsessionid; still needing excised
      * @param originalUrl the service url
      * @param artifactId the artifact id
-     * @param httpClient http client to process requests
+     * @param responseType the HTTP method for the response
      * @param authnMethod the authentication method required for this service
      */
     public DefaultMultiFactorAuthenticationSupportingWebApplicationService(final String id, final String originalUrl,
-            final String artifactId, final HttpClient httpClient, @NotNull final String authnMethod) {
-        super(cleanupUrl(id), originalUrl, artifactId, httpClient);
-        this.wrapperService = new SimpleWebApplicationServiceImpl(id, httpClient);
+                                                                           final String artifactId, final ResponseType responseType,
+                                                                           @NotNull final String authnMethod) {
+        super(cleanupUrl(id), originalUrl, artifactId);
+        this.wrapperService = new SimpleWebApplicationServiceImpl(id);
         this.authenticationMethod = authnMethod;
+        this.responseType = responseType;
     }
 
     @Override
@@ -91,22 +99,27 @@ public final class DefaultMultiFactorAuthenticationSupportingWebApplicationServi
      * @param id the service id, potentially with a jsessionid; still needing excised
      * @param originalUrl the service url
      * @param artifactId the artifact id
-     * @param httpClient http client to process requests
+     * @param responseType the HTTP method for the response
      * @param authnMethod the authentication method required for this service
      * @param authenticationMethodSource the authentication method source for this service
      */
     public DefaultMultiFactorAuthenticationSupportingWebApplicationService(
             final String id, final String originalUrl,
-            final String artifactId, final HttpClient httpClient,
+            final String artifactId, final ResponseType responseType,
             @NotNull final String authnMethod,
             @NotNull final AuthenticationMethodSource authenticationMethodSource) {
-        this(id, originalUrl, artifactId, httpClient, authnMethod);
+        this(id, originalUrl, artifactId, responseType, authnMethod);
         this.authenticationMethodSource = authenticationMethodSource;
     }
 
-    @Override
     public Response getResponse(final String ticketId) {
-        return wrapperService.getResponse(ticketId);
+        final HashMap parameters = new HashMap();
+        if(StringUtils.hasText(ticketId)) {
+            parameters.put("ticket", ticketId);
+        }
+
+        return ResponseType.POST == this.responseType ? DefaultResponse.getPostResponse(this.getOriginalUrl(), parameters):
+                DefaultResponse.getRedirectResponse(this.getOriginalUrl(), parameters);
     }
 
     @Override

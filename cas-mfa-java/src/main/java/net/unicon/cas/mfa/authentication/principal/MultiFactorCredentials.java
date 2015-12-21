@@ -1,5 +1,13 @@
 package net.unicon.cas.mfa.authentication.principal;
 
+import net.unicon.cas.mfa.authentication.DefaultCompositeAuthentication;
+import net.unicon.cas.mfa.util.MultiFactorUtils;
+import org.jasig.cas.authentication.Authentication;
+import org.jasig.cas.authentication.Credential;
+import org.jasig.cas.authentication.principal.Principal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.Hashtable;
 import java.util.LinkedHashMap;
@@ -7,17 +15,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import net.unicon.cas.mfa.authentication.DefaultCompositeAuthentication;
-import net.unicon.cas.mfa.util.MultiFactorUtils;
-
-import org.jasig.cas.authentication.Authentication;
-import org.jasig.cas.authentication.principal.Credentials;
-import org.jasig.cas.authentication.principal.Principal;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
- * A {@link Credentials} implementation that is to ease multifactor authentication.
+ * A {@link Credential} implementation that is to ease multifactor authentication.
  * It primarily carries the following entities:
  * <ul>
  *  <li><strong>Chain of credentials:</strong> represent various forms of credentials during an MFA flow</li>
@@ -25,7 +24,7 @@ import org.slf4j.LoggerFactory;
  *      when credentials are verified.
  *  </li>
  * </ul>
- * <p>Because the {@link Credentials} itself is simply a marker interface, it is up to each credential
+ * <p>Because the {@link Credential} itself is simply a marker interface, it is up to each credential
  * implementation in the chain to decide how it wants to identify itself. This identifier will be used
  * to locate the particular credential entry in the collection.
  *
@@ -39,17 +38,15 @@ import org.slf4j.LoggerFactory;
  * @see #getChainedCredentials()
  * @see #getAuthentication()
  */
-public class MultiFactorCredentials implements Credentials {
+public class MultiFactorCredentials implements Credential {
 
-    private static final long serialVersionUID = -2958788799684788738L;
+    private final Map<String, Credential> chainedCredentials = new LinkedHashMap<String, Credential>();
 
-    private Map<String, Credentials> chainedCredentials = new LinkedHashMap<String, Credentials>();
-
-    private List<Authentication> chainedAuthentication = new LinkedList<Authentication>();
+    private final List<Authentication> chainedAuthentication = new LinkedList<Authentication>();
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    public final Map<String, Credentials> getChainedCredentials() {
+    public final Map<String, Credential> getChainedCredentials() {
         return this.chainedCredentials;
     }
 
@@ -168,7 +165,15 @@ public class MultiFactorCredentials implements Credentials {
         return null;
     }
 
-    public final Credentials getCredentials() {
+    public final Credential getCredentials() {
         return getChainedCredentials().values().iterator().next();
+    }
+
+    @Override
+    public String getId() {
+        if (getPrincipal() != null) {
+            return getPrincipal().getId();
+        }
+        return Credential.UNKNOWN_ID;
     }
 }

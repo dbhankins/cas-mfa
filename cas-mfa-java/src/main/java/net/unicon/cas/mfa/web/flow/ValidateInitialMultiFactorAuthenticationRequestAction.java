@@ -7,7 +7,7 @@ import net.unicon.cas.mfa.util.MultiFactorUtils;
 import net.unicon.cas.mfa.web.flow.event.MultiFactorAuthenticationSpringWebflowEventBuilder;
 import net.unicon.cas.mfa.web.flow.util.MultiFactorRequestContextUtils;
 import net.unicon.cas.mfa.web.support.MultiFactorAuthenticationSupportingWebApplicationService;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jasig.cas.authentication.Authentication;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -144,6 +144,10 @@ public final class ValidateInitialMultiFactorAuthenticationRequestAction extends
                         requestedAuthenticationMethod)) {
             logger.trace("Authentication method [{}] is EQUAL -- OR -- WEAKER than any previously fulfilled methods [{}]; "
                     + "proceeding with flow normally...", requestedAuthenticationMethod, previouslyAchievedAuthenticationMethods);
+            return new Event(this, EVENT_ID_REQUIRE_TGT);
+        }
+
+        if (context.getRequestParameters().get("renew") != null) {
             return new Event(this, EVENT_ID_REQUIRE_TGT);
         }
 

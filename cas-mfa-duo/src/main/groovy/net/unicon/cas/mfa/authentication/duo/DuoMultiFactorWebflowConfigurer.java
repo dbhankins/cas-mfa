@@ -1,7 +1,7 @@
 package net.unicon.cas.mfa.authentication.duo;
 
-import org.jasig.cas.authentication.principal.AbstractPersonDirectoryCredentialsToPrincipalResolver;
-import org.jasig.cas.authentication.principal.Credentials;
+import org.jasig.cas.authentication.Credential;
+import org.jasig.cas.authentication.principal.PersonDirectoryPrincipalResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -19,7 +19,7 @@ import java.util.List;
  * @author Misagh Moayyed
  */
 @Component
-public class DuoMultiFactorWebflowConfigurer implements InitializingBean {
+public final class DuoMultiFactorWebflowConfigurer implements InitializingBean {
     private static final Logger LOGGER = LoggerFactory.getLogger(DuoMultiFactorWebflowConfigurer.class);
 
     @Autowired
@@ -31,22 +31,21 @@ public class DuoMultiFactorWebflowConfigurer implements InitializingBean {
     public void afterPropertiesSet() throws Exception {
         try {
             final List resolvers = this.context.getBean("mfaCredentialsToPrincipalResolvers", List.class);
-            resolvers.add(new DuoCredentialsToPrincipalResolver());
+            resolvers.add(0, new DuoCredentialsToPrincipalResolver());
         } catch (final Exception e) {
             LOGGER.error(e.getMessage(), e);
         }
     }
 
-    private class DuoCredentialsToPrincipalResolver extends AbstractPersonDirectoryCredentialsToPrincipalResolver {
-
+    private static class DuoCredentialsToPrincipalResolver extends PersonDirectoryPrincipalResolver {
         @Override
-        protected String extractPrincipalId(final Credentials credentials) {
-            final DuoCredentials duoCredentials = (DuoCredentials) credentials;
+        protected String extractPrincipalId(final Credential credential) {
+            final DuoCredentials duoCredentials = (DuoCredentials) credential;
             return duoCredentials.getUsername();
         }
 
         @Override
-        public boolean supports(final Credentials credentials) {
+        public boolean supports(final Credential credentials) {
             return credentials != null && credentials instanceof DuoCredentials;
         }
     }

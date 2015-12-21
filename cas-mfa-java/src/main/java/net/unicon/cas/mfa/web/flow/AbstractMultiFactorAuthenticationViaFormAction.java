@@ -14,12 +14,12 @@ import net.unicon.cas.mfa.web.support.MultiFactorAuthenticationSupportingWebAppl
 import org.jasig.cas.CentralAuthenticationService;
 import org.jasig.cas.authentication.Authentication;
 import org.jasig.cas.authentication.AuthenticationManager;
+import org.jasig.cas.authentication.Credential;
 import org.jasig.cas.authentication.handler.AuthenticationException;
-import org.jasig.cas.authentication.principal.Credentials;
+import org.jasig.cas.authentication.principal.Response.ResponseType;
 import org.jasig.cas.authentication.principal.SimpleWebApplicationServiceImpl;
 import org.jasig.cas.authentication.principal.WebApplicationService;
 import org.jasig.cas.ticket.TicketException;
-import org.jasig.cas.web.bind.CredentialsBinder;
 import org.jasig.cas.web.support.WebUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +37,7 @@ import java.util.List;
 
 /**
  * An abstraction that specifies how the authentication flow should behave.
- * It primarily acts as a wrapper recipient of authentication requests via form,
- * which is loosely mimics the behavior of {@link org.jasig.cas.web.flow.AuthenticationViaFormAction}.
+ * It primarily acts as a wrapper recipient of authentication requests via form.
  *
  * <p>Implementations are notified of the authentication type (MFA, non-MFA)
  * and are responsible to act accordingly.
@@ -64,12 +63,6 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
      */
     @NotNull
     protected CentralAuthenticationService cas;
-
-    /**
-     * The credentials binder.
-     */
-    @NotNull
-    protected CredentialsBinder credentialsBinder;
 
     /**
      * MultiFactorAuthenticationRequestResolver.
@@ -128,29 +121,13 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
     }
 
     /**
-     * Bind the request to the credentials.
-     *
-     * @param context the context
-     * @param credentials credentials
-     *
-     * @throws Exception if the binding operation fails, or if the request cant be obtained
-     */
-    public final void doBind(final RequestContext context, final Credentials credentials) throws Exception {
-        final HttpServletRequest request = WebUtils.getHttpServletRequest(context);
-
-        if (this.credentialsBinder != null && this.credentialsBinder.supports(credentials.getClass())) {
-            this.credentialsBinder.bind(request, credentials);
-        }
-    }
-
-    /**
      * Determine whether the request is MFA compliant.
      *
      * @param context the request context
      *
      * @return true, if this is a MFA request.
      */
-    private boolean isMultiFactorAuthenticationRequest(final RequestContext context) {
+    private static boolean isMultiFactorAuthenticationRequest(final RequestContext context) {
         return MultiFactorRequestContextUtils.getMfaTransaction(context) != null;
     }
 
@@ -172,7 +149,7 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
      *
      * @throws Exception the exception
      */
-    protected final Event doMultiFactorAuthentication(final RequestContext context, final Credentials credentials,
+    protected final Event doMultiFactorAuthentication(final RequestContext context, final Credential credentials,
                                                       final MessageContext messageContext, final String id) throws Exception {
 
         Assert.notNull(id);
@@ -219,7 +196,7 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
      *
      * @throws Exception the exception
      */
-    protected abstract Event doAuthentication(final RequestContext context, final Credentials credentials,
+    protected abstract Event doAuthentication(final RequestContext context, final Credential credentials,
                                               final MessageContext messageContext, final String id) throws Exception;
 
     /**
@@ -254,7 +231,7 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
      *
      * @throws Exception the exception
      */
-    private Event submit(final RequestContext context, final Credentials credentials, final MessageContext messageContext,
+    private Event submit(final RequestContext context, final Credential credentials, final MessageContext messageContext,
                               final String id) throws Exception {
 
         if (isMultiFactorAuthenticationRequest(context)) {
@@ -280,17 +257,8 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
      * @throws TicketException in the event that granting the TGT fails.
      */
     protected abstract Event multiFactorAuthenticationSuccessful(final Authentication authentication, final RequestContext context,
-                                                                 final Credentials credentials, final MessageContext messageContext,
-                                                                 final String id) throws TicketException;
-
-    /**
-     * Set the binder instance.
-     *
-     * @param credentialsBinder the binder instance
-     */
-    public final void setCredentialsBinder(final CredentialsBinder credentialsBinder) {
-        this.credentialsBinder = credentialsBinder;
-    }
+                                                                 final Credential credentials, final MessageContext messageContext,
+                                                                 final String id) throws Exception;
 
     /**
      * CAS instance used to handle authentications. This CAS instance is only
@@ -370,7 +338,7 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
 
     @Override
     protected final Event doExecute(final RequestContext ctx) throws Exception {
-        final Credentials credentials = (Credentials) ctx.getFlowScope().get("credentials");
+        final Credential credentials = (Credential) ctx.getFlowScope().get("credentials");
         final MessageContext messageContext = ctx.getMessageContext();
 
 
@@ -402,23 +370,26 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
                                                                           final RequestContext context) {
 
         WebApplicationService serviceToUse = service;
+        final HttpServletRequest request = HttpServletRequest.class.cast(context.getExternalContext().getNativeRequest());
+        final String responseMethod = request.getParameter("method");
+        final ResponseType responseType = "POST".equalsIgnoreCase(responseMethod) ? ResponseType.POST : ResponseType.REDIRECT;
         if (service == null) {
-            serviceToUse = new SimpleWebApplicationServiceImpl(this.hostname, null);
+            serviceToUse = new SimpleWebApplicationServiceImpl(this.hostname);
         }
 
         final List<MultiFactorAuthenticationRequestContext> mfaRequests =
-                this.multiFactorAuthenticationRequestResolver.resolve(authentication, serviceToUse);
+                this.multiFactorAuthenticationRequestResolver.resolve(authentication, serviceToUse, responseType);
         if (mfaRequests != null) {
             for (final MultiFactorAuthenticationRequestContext mfaRequest : mfaRequests) {
                 this.authenticationMethodVerifier.verifyAuthenticationMethod(mfaRequest.getMfaService().getAuthenticationMethod(),
                         mfaRequest.getMfaService(),
-                        HttpServletRequest.class.cast(context.getExternalContext().getNativeRequest()));
+                        request);
 
                 logger.info("There is an existing mfa request for service [{}] with a requested authentication method of [{}]",
                         mfaRequest.getMfaService().getId(), mfaRequest.getMfaService().getAuthenticationMethod());
             }
             logger.debug("Resolved {} multifactor authentication requests", mfaRequests.size());
-            if (mfaRequests.size() == 0) {
+            if (mfaRequests.isEmpty()) {
                 logger.debug("No multifactor authentication requests could be resolved.");
                 return null;
             }
@@ -440,7 +411,7 @@ public abstract class AbstractMultiFactorAuthenticationViaFormAction extends Abs
                                                      final RequestContext context) {
 
         MultiFactorAuthenticationTransactionContext mfaTx = MultiFactorRequestContextUtils.getMfaTransaction(context);
-        if (mfaTx == null && mfaRequests.size() > 0) {
+        if (mfaTx == null && !mfaRequests.isEmpty()) {
             final WebApplicationService svc = mfaRequests.get(0).getMfaService();
             mfaTx = new MultiFactorAuthenticationTransactionContext(svc.getId());
         }

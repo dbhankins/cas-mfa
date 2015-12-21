@@ -3,7 +3,11 @@ package net.unicon.cas.mfa.web.flow;
 import net.unicon.cas.mfa.authentication.principal.MultiFactorCredentials;
 import net.unicon.cas.mfa.web.support.MultiFactorAuthenticationSupportingWebApplicationService;
 import net.unicon.cas.mfa.web.support.UnrecognizedAuthenticationMethodException;
-import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang3.ArrayUtils;
+import org.jasig.cas.authentication.principal.PersonDirectoryPrincipalResolver;
+import org.jasig.cas.authentication.principal.PrincipalFactory;
+import org.jasig.cas.authentication.principal.PrincipalResolver;
+import org.jasig.services.persondir.IPersonAttributeDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -22,6 +26,7 @@ import org.springframework.binding.mapping.impl.DefaultMapper;
 import org.springframework.binding.mapping.impl.DefaultMapping;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
+import org.springframework.web.context.WebApplicationContext;
 import org.springframework.webflow.action.EvaluateAction;
 import org.springframework.webflow.action.ViewFactoryActionAdapter;
 import org.springframework.webflow.definition.registry.FlowDefinitionRegistry;
@@ -73,6 +78,9 @@ public class CasMultiFactorWebflowConfigurer implements InitializingBean {
     @Autowired
     private FlowDefinitionRegistry flowDefinitionRegistry;
 
+    @Autowired
+    private WebApplicationContext context;
+
     @Override
     @PostConstruct
     public void afterPropertiesSet() throws Exception {
@@ -89,9 +97,27 @@ public class CasMultiFactorWebflowConfigurer implements InitializingBean {
             setupWebflow(flowIds);
             LOGGER.debug("Configured webflow for multifactor authentication.");
 
+            LOGGER.debug("Registering default credentials-to-principal resolver...");
+            registerDefaultCredentialsToPrincipalResolver();
+            LOGGER.debug("Registered default credentials-to-principal resolver.");
         } catch (final Exception e) {
             LOGGER.error(e.getMessage(), e);
         }
+    }
+
+    /**
+     * Registers the default credentials-to-principal resolver for the second or later factors. Also attaches an
+     * attribute repository to the resolver.
+     */
+    protected void registerDefaultCredentialsToPrincipalResolver() {
+        final List<PrincipalResolver> resolvers = this.context.getBean("mfaCredentialsToPrincipalResolvers", List.class);
+        final PersonDirectoryPrincipalResolver defaultResolver = new PersonDirectoryPrincipalResolver();
+
+        final IPersonAttributeDao attributeRepository = this.context.getBean("attributeRepository", IPersonAttributeDao.class);
+        final PrincipalFactory principalFactory = this.context.getBean("principalFactory", PrincipalFactory.class);
+        defaultResolver.setAttributeRepository(attributeRepository);
+        defaultResolver.setPrincipalFactory(principalFactory);
+        resolvers.add(defaultResolver);
     }
 
     /**
@@ -136,7 +162,8 @@ public class CasMultiFactorWebflowConfigurer implements InitializingBean {
      * @param targetStateId the target state id
      * @param clazz         the exception class
      */
-    protected void addGlobalTransitionIfExceptionIsThrown(final Flow flow, final String targetStateId, final Class<?> clazz) {
+    protected void addGlobalTransitionIfExceptionIsThrown(final Flow flow, final String targetStateId, final Class<? extends Throwable>
+            clazz) {
 
         try {
             final TransitionExecutingFlowExecutionExceptionHandler handler = new TransitionExecutingFlowExecutionExceptionHandler();
@@ -355,7 +382,8 @@ public class CasMultiFactorWebflowConfigurer implements InitializingBean {
                     new LiteralExpression(viewId),
                     this.flowBuilderServices.getExpressionParser(),
                     this.flowBuilderServices.getConversionService(),
-                    null, this.flowBuilderServices.getValidator());
+                    null, this.flowBuilderServices.getValidator(),
+                    this.flowBuilderServices.getValidationHintResolver());
 
             final Action finalResponseAction = new ViewFactoryActionAdapter(viewFactory);
             endState.setFinalResponseAction(finalResponseAction);
@@ -494,7 +522,7 @@ public class CasMultiFactorWebflowConfigurer implements InitializingBean {
          *
          * @param subflowId the subflow id
          */
-        public BasicSubflowExpression(final String subflowId) {
+        BasicSubflowExpression(final String subflowId) {
             this.subflowId = subflowId;
         }
 

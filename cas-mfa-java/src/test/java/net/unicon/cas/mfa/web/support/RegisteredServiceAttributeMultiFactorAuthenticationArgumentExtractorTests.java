@@ -2,6 +2,7 @@ package net.unicon.cas.mfa.web.support;
 
 import net.unicon.cas.addons.serviceregistry.RegisteredServiceWithAttributes;
 import net.unicon.cas.mfa.web.support.MultiFactorAuthenticationSupportingWebApplicationService.AuthenticationMethodSource;
+import org.jasig.cas.authentication.principal.Response;
 import org.jasig.cas.authentication.principal.Service;
 import org.jasig.cas.services.RegisteredService;
 import org.jasig.cas.services.ServicesManager;
@@ -15,8 +16,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 
 public class RegisteredServiceAttributeMultiFactorAuthenticationArgumentExtractorTests {
@@ -25,11 +32,12 @@ public class RegisteredServiceAttributeMultiFactorAuthenticationArgumentExtracto
     
     private static final String CAS_AUTHN_METHOD = "strong_two";
     
-    private MultiFactorAuthenticationSupportingWebApplicationService getMfaService() {
-        return new DefaultMultiFactorAuthenticationSupportingWebApplicationService(CAS_SERVICE, CAS_SERVICE, null, null, CAS_AUTHN_METHOD);
+    private static MultiFactorAuthenticationSupportingWebApplicationService getMfaService() {
+        return new DefaultMultiFactorAuthenticationSupportingWebApplicationService(CAS_SERVICE, CAS_SERVICE, null,
+                Response.ResponseType.REDIRECT, CAS_AUTHN_METHOD);
     }
     
-    private HttpServletRequest getRequest() {
+    private static HttpServletRequest getRequest() {
         final HttpServletRequest req = mock(HttpServletRequest.class);
         when(req.getParameter(anyString())).thenReturn(CAS_SERVICE);
         return req;
@@ -42,7 +50,8 @@ public class RegisteredServiceAttributeMultiFactorAuthenticationArgumentExtracto
         set.add(new CasArgumentExtractor());
         
         final MultiFactorWebApplicationServiceFactory factory = mock(MultiFactorWebApplicationServiceFactory.class);
-        when(factory.create(anyString(), anyString(), anyString(), anyString(), any(AuthenticationMethodSource.class)))
+        when(factory.create(anyString(), anyString(), anyString(), Response.ResponseType.REDIRECT,
+                anyString(), any(AuthenticationMethodSource.class)))
             .thenReturn(getMfaService());
         
         final AuthenticationMethodVerifier verifier = mock(AuthenticationMethodVerifier.class);
@@ -64,6 +73,7 @@ public class RegisteredServiceAttributeMultiFactorAuthenticationArgumentExtracto
 
         final MultiFactorAuthenticationSupportingWebApplicationService webSvc =
                 (MultiFactorAuthenticationSupportingWebApplicationService) extractor.extractService(getRequest());
+        assertNotNull(webSvc);
         assertEquals(webSvc.getAuthenticationMethod(), CAS_AUTHN_METHOD);
     }
     
@@ -101,7 +111,8 @@ public class RegisteredServiceAttributeMultiFactorAuthenticationArgumentExtracto
         set.add(new CasArgumentExtractor());
 
         final MultiFactorWebApplicationServiceFactory factory = mock(MultiFactorWebApplicationServiceFactory.class);
-        when(factory.create(anyString(), anyString(), anyString(), anyString(), any(AuthenticationMethodSource.class)))
+        when(factory.create(anyString(), anyString(), anyString(), Response.ResponseType.REDIRECT,
+                anyString(), any(AuthenticationMethodSource.class)))
                 .thenReturn(getMfaService());
 
         final AuthenticationMethodVerifier verifier = mock(AuthenticationMethodVerifier.class);

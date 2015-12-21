@@ -8,9 +8,10 @@ import net.unicon.cas.mfa.authentication.RegisteredServiceMfaRoleProcessor;
 import net.unicon.cas.mfa.authentication.StubAuthenticationMethodTranslator;
 import net.unicon.cas.mfa.web.support.MultiFactorWebApplicationServiceFactory;
 import net.unicon.cas.mfa.web.support.MultiFactorAuthenticationSupportingWebApplicationService;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jasig.cas.authentication.Authentication;
 import org.jasig.cas.authentication.principal.WebApplicationService;
+import org.jasig.cas.authentication.principal.Response.ResponseType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +98,8 @@ public class PrincipalAttributeMultiFactorAuthenticationRequestResolver implemen
 
     @Override
     public List<MultiFactorAuthenticationRequestContext> resolve(@NotNull final Authentication authentication,
-                                                                 @NotNull final WebApplicationService targetService) {
+                                                                 @NotNull final WebApplicationService targetService,
+                                                                 @NotNull final ResponseType responseType) {
         final List<MultiFactorAuthenticationRequestContext> list = new ArrayList<MultiFactorAuthenticationRequestContext>();
         if ((authentication != null) && (targetService != null)) {
 
@@ -113,14 +115,16 @@ public class PrincipalAttributeMultiFactorAuthenticationRequestResolver implemen
             if (mfaMethodAsObject != null) {
                 if (mfaMethodAsObject instanceof String) {
                     final String mfaMethod = mfaMethodAsObject.toString();
-                    final MultiFactorAuthenticationRequestContext ctx = getMfaRequestContext(mfaMethod, authentication, targetService);
+                    final MultiFactorAuthenticationRequestContext ctx = getMfaRequestContext(mfaMethod, authentication,
+                            targetService, responseType);
                     if (ctx != null) {
                         list.add(ctx);
                     }
                 } else if (mfaMethodAsObject instanceof List) {
                     final List<String> mfaMethods = (List<String>) mfaMethodAsObject;
                     for (final String mfaMethod : mfaMethods) {
-                        final MultiFactorAuthenticationRequestContext ctx = getMfaRequestContext(mfaMethod, authentication, targetService);
+                        final MultiFactorAuthenticationRequestContext ctx = getMfaRequestContext(mfaMethod,
+                                authentication, targetService, responseType);
                         if (ctx != null) {
                             list.add(ctx);
                         }
@@ -129,9 +133,9 @@ public class PrincipalAttributeMultiFactorAuthenticationRequestResolver implemen
             }
         }
 
-        if (list.size() == 0) {
-            logger.debug("No multifactor authentication requests could be resolved based on [{}]"
-                    , this.authenticationMethodAttributeName);
+        if (list.isEmpty()) {
+            logger.debug("No multifactor authentication requests could be resolved based on [{}]",
+                    this.authenticationMethodAttributeName);
         }
         return list;
     }
@@ -139,14 +143,16 @@ public class PrincipalAttributeMultiFactorAuthenticationRequestResolver implemen
     /**
      * Gets mfa request context.
      *
-     * @param method the mfa method
+     * @param method         the mfa method
      * @param authentication the authentication
-     * @param targetService the target service
+     * @param targetService  the target service
+     * @param responseType   the response type
      * @return the mfa request context
      */
     private MultiFactorAuthenticationRequestContext getMfaRequestContext(final String method,
                                                                          final Authentication authentication,
-                                                                         final WebApplicationService targetService) {
+                                                                         final WebApplicationService targetService,
+                                                                         final ResponseType responseType) {
 
         final String mfaMethod = this.authenticationMethodTranslator.translate(targetService, method);
         if (StringUtils.isNotBlank(mfaMethod)) {
@@ -162,7 +168,7 @@ public class PrincipalAttributeMultiFactorAuthenticationRequestResolver implemen
             final int mfaMethodRank = this.authenticationMethodConfiguration.getAuthenticationMethod(mfaMethod).getRank();
             final MultiFactorAuthenticationSupportingWebApplicationService svc =
                     this.mfaServiceFactory.create(targetService.getId(), targetService.getId(),
-                            targetService.getArtifactId(), mfaMethod, AuthenticationMethodSource.PRINCIPAL_ATTRIBUTE);
+                            targetService.getArtifactId(), responseType, mfaMethod, AuthenticationMethodSource.PRINCIPAL_ATTRIBUTE);
 
             return new MultiFactorAuthenticationRequestContext(svc, mfaMethodRank);
         }
